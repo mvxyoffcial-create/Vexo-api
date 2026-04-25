@@ -1,3 +1,47 @@
+"""
+╔══════════════════════════════════════════════════════════════╗
+║                    VEXO PLATFORM - main.py                   ║
+║         Full Backend: Auth, Deploy, AI, Google OAuth         ║
+║             Email Verification + Password Reset              ║
+╚══════════════════════════════════════════════════════════════╝
+
+Requirements (requirements.txt):
+    fastapi==0.111.0
+    uvicorn[standard]==0.29.0
+    motor==3.3.2
+    pymongo==4.6.3
+    python-jose[cryptography]==3.3.0
+    bcrypt==4.1.3
+    python-multipart==0.0.9
+    httpx==0.27.0
+    python-dotenv==1.0.1
+    aiofiles==23.2.1
+    gitpython==3.1.43
+    slowapi==0.1.9
+    authlib==1.3.0
+    email-validator==2.1.1
+    Jinja2==3.1.4
+
+Environment Variables (.env):
+    MONGO_URI=mongodb+srv://...
+    JWT_SECRET=your_super_secret_key_here
+    GOOGLE_CLIENT_ID=your_google_client_id
+    GOOGLE_CLIENT_SECRET=your_google_client_secret
+    GOOGLE_REDIRECT_URI=https://your-app.koyeb.app/auth/google/callback
+    SMTP_HOST=smtp.gmail.com
+    SMTP_PORT=587
+    SMTP_USER=your@gmail.com
+    SMTP_PASS=your_app_password
+    BACKEND_URL=https://your-app.koyeb.app
+    FRONTEND_URL=https://your-app.koyeb.app
+    NVIDIA_API_BASE=https://nemotron-3-nano-nvidia.vercel.app/chat
+
+Koyeb Deployment:
+    - Build command: pip install -r requirements.txt
+    - Run command:   uvicorn main:app --host 0.0.0.0 --port 8000
+    - Health check:  /health
+"""
+
 import asyncio
 import hashlib
 import hmac
@@ -37,7 +81,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from fastapi.staticfiles import StaticFiles
 from jose import JWTError, jwt
 from motor.motor_asyncio import AsyncIOMotorClient
-from passlib.context import CryptContext
+import bcrypt as _bcrypt_lib
 from pydantic import BaseModel, EmailStr, Field, validator
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
@@ -70,7 +114,6 @@ APPS_DIR = Path("./vexo_apps")
 APPS_DIR.mkdir(exist_ok=True)
 
 SESSION_SECRET = os.getenv("SESSION_SECRET", secrets.token_urlsafe(32))
-
 # ─────────────────────────── LOGGING ──────────────────────────
 logging.basicConfig(
     level=logging.INFO,
@@ -122,16 +165,22 @@ async def get_db():
 
 
 # ─────────────────────────── SECURITY ─────────────────────────
-pwd_ctx = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# Using bcrypt directly (passlib breaks on Python 3.13 with 72-byte limit)
 bearer = HTTPBearer(auto_error=False)
 
 
 def hash_password(password: str) -> str:
-    return pwd_ctx.hash(password)
+    # SHA-256 pre-hash bypasses bcrypt's 72-byte limit cleanly
+    pw_bytes = hashlib.sha256(password.encode("utf-8")).hexdigest().encode("utf-8")
+    return _bcrypt_lib.hashpw(pw_bytes, _bcrypt_lib.gensalt(rounds=12)).decode("utf-8")
 
 
 def verify_password(plain: str, hashed: str) -> bool:
-    return pwd_ctx.verify(plain, hashed)
+    try:
+        pw_bytes = hashlib.sha256(plain.encode("utf-8")).hexdigest().encode("utf-8")
+        return _bcrypt_lib.checkpw(pw_bytes, hashed.encode("utf-8"))
+    except Exception:
+        return False
 
 
 def create_jwt(data: dict, expires_delta: Optional[timedelta] = None) -> str:
