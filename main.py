@@ -48,8 +48,8 @@ from starlette.responses import JSONResponse as StarletteJSON
 # ─────────────────────────── CONFIG ───────────────────────────
 load_dotenv()
 
-MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017")
-JWT_SECRET = os.getenv("JWT_SECRET", "vexo-super-secret-jwt-key-change-in-production")
+MONGO_URI = "mongodb+srv://Zerobothost:zero8907@cluster0.szwdcyb.mongodb.net/?appName=Cluster0"
+JWT_SECRET = "rashmibabyy"
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRE_HOURS = 24 * 7  # 7 days
 
@@ -57,14 +57,14 @@ GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
 GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")
 GOOGLE_REDIRECT_URI = os.getenv("GOOGLE_REDIRECT_URI", "http://localhost:8000/auth/google/callback")
 
-SMTP_HOST = os.getenv("SMTP_HOST", "smtp.gmail.com")
-SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
-SMTP_USER = os.getenv("SMTP_USER", "")
-SMTP_PASS = os.getenv("SMTP_PASS", "")
+SMTP_HOST = "smtp.gmail.com"
+SMTP_PORT = "587"
+SMTP_USER = "natravelsoffcail@gmail.com"
+SMTP_PASS = "qpha qkbn rytr ncvu"
 
 BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8000")
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:8000")
-NVIDIA_API_BASE = os.getenv("NVIDIA_API_BASE", "https://nemotron-3-nano-nvidia.vercel.app/chat")
+NVIDIA_API_BASE = "https://nemotron-3-nano-nvidia.vercel.app/chat"
 
 APPS_DIR = Path("./vexo_apps")
 APPS_DIR.mkdir(exist_ok=True)
