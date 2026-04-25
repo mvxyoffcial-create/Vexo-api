@@ -135,6 +135,31 @@ def allocate_port() -> int:
             return port
     raise RuntimeError("No free ports available in range 9000-9999")
 
+# ─────────────────────── MONGO SERIALIZER ─────────────────────
+def serialize_doc(doc: dict) -> dict:
+    """Convert a MongoDB document to a JSON-serializable dict.
+    Converts ObjectId → str and datetime → isoformat string recursively."""
+    from bson import ObjectId
+    result = {}
+    for k, v in doc.items():
+        if isinstance(v, ObjectId):
+            result[k] = str(v)
+        elif isinstance(v, datetime):
+            result[k] = v.isoformat()
+        elif isinstance(v, dict):
+            result[k] = serialize_doc(v)
+        elif isinstance(v, list):
+            result[k] = [
+                serialize_doc(i) if isinstance(i, dict)
+                else str(i) if isinstance(i, ObjectId)
+                else i.isoformat() if isinstance(i, datetime)
+                else i
+                for i in v
+            ]
+        else:
+            result[k] = v
+    return result
+
 # ─────────────────────────── LOGGING ──────────────────────────
 logging.basicConfig(
     level=logging.INFO,
@@ -231,7 +256,7 @@ async def get_current_user(
     user = await database["users"].find_one({"_id": user_id})
     if not user:
         raise HTTPException(status_code=401, detail="User not found")
-    return user
+    return serialize_doc(user)
 
 
 # ─────────────────────────── EMAIL ────────────────────────────
@@ -1106,6 +1131,7 @@ async def list_apps(
     ).sort("created_at", -1)
     apps = []
     async for doc in cursor:
+        doc = serialize_doc(doc)
         doc["id"] = doc.pop("_id", doc.get("app_id"))
         apps.append(doc)
     return {"apps": apps}
@@ -1122,6 +1148,7 @@ async def get_app(
     )
     if not app_doc:
         raise HTTPException(404, "App not found")
+    app_doc = serialize_doc(app_doc)
     app_doc["id"] = app_doc.pop("_id", app_doc.get("app_id"))
     return app_doc
 
@@ -1138,6 +1165,7 @@ async def get_app_logs(
     )
     if not app_doc:
         raise HTTPException(404, "App not found")
+    app_doc = serialize_doc(app_doc)
 
     log_file = APPS_DIR / app_id / "vexo.log"
     if not log_file.exists():
@@ -1172,6 +1200,7 @@ async def stop_app(
     )
     if not app_doc:
         raise HTTPException(404, "App not found")
+    app_doc = serialize_doc(app_doc)
 
     if app_id in running_processes:
         running_processes[app_id].terminate()
@@ -1247,6 +1276,7 @@ async def get_chat_history(
     chat_doc = await database["ai_chats"].find_one({"user_id": current_user["_id"]})
     if not chat_doc:
         return {"messages": [], "message_count": 0}
+    chat_doc = serialize_doc(chat_doc)
     messages = chat_doc.get("messages", [])
     return {"messages": messages, "message_count": len(messages)}
 
