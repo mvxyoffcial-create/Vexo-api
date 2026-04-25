@@ -118,8 +118,8 @@ APPS_DIR.mkdir(exist_ok=True)
 
 # Vexo itself runs on 8080; deployed user apps start from 9000
 VEXO_PORT = "8080"
-APP_BASE_PORT = "9000"
-APP_MAX_PORT  = "9999"
+APP_BASE_PORT = 9000
+APP_MAX_PORT  = 9999
 
 SESSION_SECRET = os.getenv("SESSION_SECRET", secrets.token_urlsafe(32))
 
@@ -480,46 +480,30 @@ def detect_start_command(app_dir: Path, app_port: int = 8080) -> str:
 # ─────────────────────────── AI HELPERS ───────────────────────
 async def call_claude_ai(prompt: str, system: str = "") -> str:
     """
-    Call Claude claude-sonnet-4-20250514 via Anthropic API.
-    Replaces the broken NVIDIA Nemotron endpoint.
+    Call Gemini via the Rudyy Cloudflare Worker API.
+    Endpoint: https://gemini.rudyy.workers.dev/chat?message=<encoded>
+    Returns the 'response' field from JSON: {"success": true, "response": "..."}
     """
-    if not ANTHROPIC_API_KEY:
-        return "⚠️ AI unavailable: ANTHROPIC_API_KEY not set in environment variables."
-
-    messages = [{"role": "user", "content": prompt}]
-    body: Dict[str, Any] = {
-        "model": "claude-sonnet-4-20250514",
-        "max_tokens": 2048,
-        "messages": messages,
-    }
-    if system:
-        body["system"] = system
+    # Prepend system prompt to the user message if provided
+    full_prompt = f"{system}\n\n{prompt}" if system else prompt
 
     try:
+        encoded = urllib.parse.quote(full_prompt)
+        url = f"https://gemini.rudyy.workers.dev/chat?message={encoded}"
         async with httpx.AsyncClient(timeout=60.0) as client:
-            resp = await client.post(
-                "https://api.anthropic.com/v1/messages",
-                headers={
-                    "x-api-key": ANTHROPIC_API_KEY,
-                    "anthropic-version": "2023-06-01",
-                    "content-type": "application/json",
-                },
-                json=body,
-            )
+            resp = await client.get(url)
             resp.raise_for_status()
             data = resp.json()
-            # Extract text from content blocks
-            for block in data.get("content", []):
-                if block.get("type") == "text":
-                    return block["text"]
-            return "⚠️ AI returned an empty response."
+            if data.get("success"):
+                return data.get("response", "⚠️ AI returned an empty response.")
+            return f"⚠️ AI error: {data.get('error', 'Unknown error')}"
     except httpx.TimeoutException:
         return "⚠️ AI response timed out. Please try again."
     except httpx.HTTPStatusError as e:
-        logger.error(f"Claude API HTTP error: {e.response.status_code} {e.response.text}")
+        logger.error(f"Gemini worker HTTP error: {e.response.status_code} {e.response.text}")
         return f"⚠️ AI service error ({e.response.status_code}). Please try again."
     except Exception as e:
-        logger.error(f"Claude API error: {e}")
+        logger.error(f"Gemini worker error: {e}")
         return f"⚠️ AI service temporarily unavailable: {str(e)}"
 
 
@@ -1596,4 +1580,22 @@ if (params.get('token')) {{ localStorage.setItem('vexo_token', params.get('token
 async function doLogin() {{
   const email = document.getElementById('email').value;
   const pass = document.getElementById('password').value;
-  if (!email || !pass) {{ showMsg('Fill in all fields', false); return
+  if (!email || !pass) {{ showMsg('Fill in all fields', false); return; }}
+  try {{
+    const r = await fetch('/auth/login', {{method:'POST',headers:{{'Content-Type':'application/json'}},body:JSON.stringify({{email,password:pass}})}});
+    const d = await r.json();
+    if (r.ok) {{ localStorage.setItem('vexo_token', d.access_token); showMsg('✓ Login successful! Redirecting...', true); setTimeout(() => window.location.href='/dashboard', 1200); }}
+    else {{ showMsg(d.detail || 'Login failed', false); }}
+  }} catch(e) {{ showMsg('Network error', false); }}
+}}
+async function forgotPwd() {{
+  const email = document.getElementById('email').value;
+  if (!email) {{ showMsg('Enter your email first', false); return; }}
+  try {{
+    const r = await fetch('/auth/forgot-password', {{method:'POST',headers:{{'Content-Type':'application/json'}},body:JSON.stringify({{email}})}});
+    const d = await r.json();
+    showMsg(d.message || 'Reset link sent!', r.ok);
+  }} catch(e) {{ showMsg('Network error', false); }}
+}}
+function showMsg(t, ok) {{ const el=document.getElementById('msg'); el.textContent=t; el.className='msg '+(ok?'ok':'err'); el.style.display='block'; }}
+</script></body></html>""")
